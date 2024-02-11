@@ -10,12 +10,22 @@
 
 using namespace std;
 
-typedef vector<vector<int>> Board;
-typedef vector<vector<char>> State;
+// Having to randomize the domain as well prevents me from using a bitmap efficiently
+// typedef vector<vector<pair<int, unsigned short>>> Board;
+typedef vector<vector<pair<int, vector<int>>>> Board;
+
+// Macro for shuffling a container with mt19937 and random_device
+#define SHUFFLE_CONTAINER_WITH_MT(container)                     \
+    do                                                           \
+    {                                                            \
+        std::random_device rd;                                   \
+        std::mt19937 g(rd());                                    \
+        std::shuffle((container).begin(), (container).end(), g); \
+    } while (0)
 
 // Get random item from vector
 template <class T>
-T get_random_item(vector<T> &v)
+T getRandomItem(vector<T> &v)
 {
     // unsigned seed = chrono::system_clock::now().time_since_epoch().count();
     // shuffle(v.begin(), v.end(), default_random_engine(seed));
@@ -30,7 +40,7 @@ void printBoard(Board &board)
     for (int i = 0; i < 9; i++)
     {
         for (int j = 0; j < 9; j++)
-            std::cout << board[i][j] << " ";
+            std::cout << board[i][j].first << " ";
         std::cout << endl;
     }
 }
@@ -60,18 +70,23 @@ public:
 
         if (approach == 1)
         {
-            return solve_backtrack(boardCopy);
+            vector<long> value = solve_backtrack(boardCopy);
+            if (value.size() > 0)
+                return value;
         }
         else if (approach == 2)
         {
-            return solve_btfc(boardCopy);
+            vector<long> value = solve_btfc(boardCopy);
+            if (value.size() > 0)
+                return value;
         }
         // else if (approach == 3)
         // {
         //     solve_btfch(board);
         // }
 
-        return {-1};
+        // return {-1};
+        throw "No solution found";
     }
 
 private:
@@ -103,52 +118,49 @@ private:
 
     vector<long> solve_backtrack(Board &board)
     {
-        Board emptyCells = getEmptyCells(board);
+        vector<pair<int, int>> emptyCells = getEmptyCells(board);
 
         // Randomize empty cells
-        mt19937 rng(random_device{}());
-        shuffle(emptyCells.begin(), emptyCells.end(), rng);
+        SHUFFLE_CONTAINER_WITH_MT(emptyCells);
 
         long nodesExpanded = 0;
-
-        // Start timer
         auto start = chrono::high_resolution_clock::now();
 
         if (solve_backtrack_helper(board, emptyCells, 0, nodesExpanded))
         {
-            // End timer
             auto end = chrono::high_resolution_clock::now();
-
-            // Calculate duration
             auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-
             return {duration.count(), nodesExpanded};
         }
 
         return {};
     }
 
-    bool solve_backtrack_helper(Board &board, Board &emptyCells, int index, long &nodesExpanded)
+    bool solve_backtrack_helper(Board &board, vector<pair<int, int>> &emptyCells, int index, long &nodesExpanded)
     {
         // If no empty cells, then the board is solved
         if (index == emptyCells.size())
             return true;
 
         // Otherwise, choose a random empty cell
-        vector<int> cell = emptyCells[index];
+        pair<int, int> cell = emptyCells[index];
+        int row = cell.first;
+        int col = cell.second;
 
         // Domain
         vector<int> domain = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
         // Randomize domain
+        // Note: Using SHUFFLE_CONTAINER_WITH_MT(domain) here makes
+        // the program MUCH slower, up to 20x slower.
         random_shuffle(domain.begin(), domain.end());
 
         for (int i = 0; i < domain.size(); i++)
         {
-            if (isValid(board, cell[0], cell[1], domain[i]))
+            if (isValid(board, row, col, domain[i]))
             {
                 // Choose
-                board[cell[0]][cell[1]] = domain[i];
+                board[row][col].first = domain[i];
 
                 ++nodesExpanded;
 
@@ -157,7 +169,7 @@ private:
                     return true;
 
                 // Unchoose
-                board[cell[0]][cell[1]] = 0;
+                board[row][col].first = 0;
             }
         }
 
@@ -169,7 +181,9 @@ private:
     // Backtracking + Forward checking
     vector<long> solve_btfc(Board &board)
     {
-        auto emptyCells = getEmptyCells(board);
+        vector<pair<int, int>> emptyCells = getEmptyCells(board);
+
+        // Randomize empty cells
         mt19937 rng(random_device{}());
         shuffle(emptyCells.begin(), emptyCells.end(), rng);
 
@@ -183,39 +197,105 @@ private:
             return {duration.count(), nodesExpanded};
         }
 
+        cout << "----------------------------------------" << endl;
+
+        printBoard(board);
+
         return {}; // Return an empty vector or appropriate error indication if no solution was found
     }
 
-    bool solve_btfc_helper(Board &board, Board &emptyCells, int index, long &nodesExpanded)
+    bool solve_btfc_helper(Board &board, vector<pair<int, int>> &emptyCells, int index, long &nodesExpanded)
     {
         // If no empty cells, then the board is solved
         if (index == emptyCells.size())
             return true;
 
         // Otherwise, choose a random empty cell
-        vector<int> cell = emptyCells[index];
+        pair<int, int> cell = emptyCells[index];
+
+        int row = cell.first;
+        int col = cell.second;
 
         // Domain
-        vector<int> domain = getDomain(board, cell[0], cell[1]);
+        vector<int> domain = board[row][col].second;
 
         // Randomize domain
         random_shuffle(domain.begin(), domain.end());
 
+        int startRow = 3 * (row / 3);
+        int startCol = 3 * (col / 3);
+
         for (int value : domain)
         {
-            if (isValid(board, cell[0], cell[1], value))
+            if (isValid(board, row, col, value))
             {
                 // Choose
-                board[cell[0]][cell[1]] = value;
+                board[row][col].first = value;
+
+                bool isConsistent = true;
+                Board boardCopy = board;
+
+                // Forward checking: Update remaining values for cells in the same row and column and grid
+                for (int i = 0; i < 9; i++)
+                {
+                    // Forward checking for rows and columns
+                    // We check if a cell is empty because then its domain should be non-empty,
+                    // which means we need to update it.
+                    if (boardCopy[row][i].first == 0)
+                    {
+                        auto &remainingValues = boardCopy[row][i].second;
+                        remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
+                        if (remainingValues.empty())
+                        {
+                            isConsistent = false;
+                            break;
+                        }
+                    }
+                    if (boardCopy[i][col].first == 0)
+                    {
+                        auto &remainingValues = boardCopy[i][col].second;
+                        remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
+                        if (remainingValues.empty())
+                        {
+                            isConsistent = false;
+                            break;
+                        }
+                    }
+                }
+
+                // Correct iteration over the 3x3 box
+                if (isConsistent)
+                { // Only proceed if still consistent
+                    for (int boxRow = 0; boxRow < 3; boxRow++)
+                    {
+                        for (int boxCol = 0; boxCol < 3; boxCol++)
+                        {
+                            int actualRow = startRow + boxRow;
+                            int actualCol = startCol + boxCol;
+                            if (boardCopy[actualRow][actualCol].first == 0)
+                            {
+                                auto &remainingValues = boardCopy[actualRow][actualCol].second;
+                                remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
+                                if (remainingValues.empty())
+                                {
+                                    isConsistent = false;
+                                    break; // Exit the inner loop
+                                }
+                            }
+                        }
+                        if (!isConsistent)
+                            break; // Exit the outer loop if inconsistent
+                    }
+                }
 
                 ++nodesExpanded;
 
                 // Explore
-                if (solve_btfc_helper(board, emptyCells, index + 1, nodesExpanded))
+                if (isConsistent && solve_btfc_helper(boardCopy, emptyCells, index + 1, nodesExpanded))
                     return true;
 
                 // Unchoose
-                board[cell[0]][cell[1]] = 0;
+                board[row][col].first = 0;
             }
         }
 
@@ -224,26 +304,29 @@ private:
 
     bool isValid(const Board &board, int row, int col, int c)
     {
+        // int startRow = 3 * (row / 3);
+        // int startCol = 3 * (col / 3);
         for (int i = 0; i < 9; i++)
         {
-            if (board[i][col] == c)
+            if (board[i][col].first == c)
                 return false;
-            if (board[row][i] == c)
+            if (board[row][i].first == c)
                 return false;
-            if (board[3 * (row / 3) + i / 3][3 * (col / 3) + i % 3] == c)
+            // if (board[startRow + i / 3][startCol + i % 3].first == c)
+            if (board[3 * (row / 3) + i / 3][3 * (col / 3) + i % 3].first == c)
                 return false;
         }
         return true;
     }
 
-    Board getEmptyCells(Board &board)
+    vector<pair<int, int>> getEmptyCells(Board &board)
     {
-        Board emptyCells;
+        vector<pair<int, int>> emptyCells;
         for (int i = 0; i < 9; i++)
         {
             for (int j = 0; j < 9; j++)
             {
-                if (board[i][j] == 0)
+                if (board[i][j].first == 0)
                     emptyCells.push_back({i, j});
             }
         }
@@ -269,11 +352,23 @@ private:
 Board processInput(string input)
 {
     Board board;
+    int value = 0;
+    // unsigned short remainingValues = 0b1111111110;
+    // vector<int> domain = {1, 2, 3, 4, 5, 6, 7, 8, 9};
     for (int i = 0; i < 9; i++)
     {
-        vector<int> row;
+        // vector<pair<int, unsigned short>> row;
+        vector<pair<int, vector<int>>> row;
         for (int j = 0; j < 9; j++)
-            row.push_back(input[i * 9 + j] - '0');
+        {
+            value = input[i * 9 + j] - '0';
+
+            // For a non-zero value, since we can't change it, we set the remainingValues to 0
+            if (value != 0)
+                row.push_back(make_pair(value, vector<int>{}));
+            else
+                row.push_back(make_pair(value, vector<int>{1, 2, 3, 4, 5, 6, 7, 8, 9}));
+        }
         board.push_back(row);
     }
     return board;
@@ -341,6 +436,18 @@ int main(int argc, char *argv[])
 
     cout << "Initial board: \n";
     printBoard(board);
+
+    // cout << "Initial domains: \n";
+    // for (int i = 0; i < 9; i++)
+    // {
+    //     for (int j = 0; j < 9; j++)
+    //     {
+    //         cout << "Domain for cell (" << i << ", " << j << "): ";
+    //         for (int k : board[i][j].second)
+    //             cout << k << " ";
+    //         cout << endl;
+    //     }
+    // }
 
     int approach = *argv[2] - '0';
 
