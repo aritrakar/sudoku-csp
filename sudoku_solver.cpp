@@ -12,7 +12,7 @@ using namespace std;
 
 // Having to randomize the domain as well prevents me from using a bitmap efficiently
 // typedef vector<vector<pair<int, unsigned short>>> Board;
-typedef vector<vector<pair<int, vector<int>>>> Board;
+typedef vector<vector<int>> Board;
 
 // Macro for shuffling a container with mt19937 and random_device
 #define SHUFFLE_CONTAINER_WITH_MT(container)                     \
@@ -40,7 +40,7 @@ void printBoard(Board &board)
     for (int i = 0; i < 9; i++)
     {
         for (int j = 0; j < 9; j++)
-            std::cout << board[i][j].first << " ";
+            std::cout << board[i][j] << " ";
         std::cout << endl;
     }
 }
@@ -160,7 +160,7 @@ private:
             if (isValid(board, row, col, domain[i]))
             {
                 // Choose
-                board[row][col].first = domain[i];
+                board[row][col] = domain[i];
 
                 ++nodesExpanded;
 
@@ -169,7 +169,7 @@ private:
                     return true;
 
                 // Unchoose
-                board[row][col].first = 0;
+                board[row][col] = 0;
             }
         }
 
@@ -190,21 +190,41 @@ private:
         long nodesExpanded = 0;
         auto start = chrono::high_resolution_clock::now();
 
-        if (solve_btfc_helper(board, emptyCells, 0, nodesExpanded))
+        vector<vector<vector<int>>> remainingValues(9, vector<vector<int>>(9, vector<int>{1, 2, 3, 4, 5, 6, 7, 8, 9}));
+
+        // Initialize remaining values for each cell
+        for (int i = 0; i < 9; i++)
+        {
+            for (int j = 0; j < 9; j++)
+            {
+                if (board[i][j] != 0)
+                {
+                    remainingValues[i][j].clear();
+                }
+                else
+                {
+                    for (int k = 0; k < 9; k++)
+                    {
+                        remainingValues[i][j].erase(remove(remainingValues[i][j].begin(), remainingValues[i][j].end(), board[i][k]), remainingValues[i][j].end());
+                        remainingValues[i][j].erase(remove(remainingValues[i][j].begin(), remainingValues[i][j].end(), board[k][j]), remainingValues[i][j].end());
+                        remainingValues[i][j].erase(remove(remainingValues[i][j].begin(), remainingValues[i][j].end(), board[3 * (i / 3) + k / 3][3 * (j / 3) + k % 3]), remainingValues[i][j].end());
+                    }
+                }
+            }
+        }
+
+        if (solve_btfc_helper(board, emptyCells, 0, nodesExpanded, remainingValues))
         {
             auto end = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
             return {duration.count(), nodesExpanded};
         }
 
-        cout << "----------------------------------------" << endl;
-
-        printBoard(board);
-
         return {}; // Return an empty vector or appropriate error indication if no solution was found
     }
 
-    bool solve_btfc_helper(Board &board, vector<pair<int, int>> &emptyCells, int index, long &nodesExpanded)
+    bool solve_btfc_helper(Board &board, vector<pair<int, int>> &emptyCells, int index,
+                           long &nodesExpanded, vector<vector<vector<int>>> &legalValues)
     {
         // If no empty cells, then the board is solved
         if (index == emptyCells.size())
@@ -217,9 +237,9 @@ private:
         int col = cell.second;
 
         // Domain
-        vector<int> domain = board[row][col].second;
+        vector<int> domain = legalValues[row][col];
 
-        // Randomize domain
+        // Randomize domain set
         random_shuffle(domain.begin(), domain.end());
 
         int startRow = 3 * (row / 3);
@@ -230,10 +250,13 @@ private:
             if (isValid(board, row, col, value))
             {
                 // Choose
-                board[row][col].first = value;
+                board[row][col] = value;
 
                 bool isConsistent = true;
-                Board boardCopy = board;
+                // Board boardCopy = board;
+
+                // Copy the legal values
+                vector<vector<vector<int>>> legalValuesCopy = legalValues;
 
                 // Forward checking: Update remaining values for cells in the same row and column and grid
                 for (int i = 0; i < 9; i++)
@@ -241,9 +264,9 @@ private:
                     // Forward checking for rows and columns
                     // We check if a cell is empty because then its domain should be non-empty,
                     // which means we need to update it.
-                    if (boardCopy[row][i].first == 0)
+                    if (board[row][i] == 0)
                     {
-                        auto &remainingValues = boardCopy[row][i].second;
+                        auto &remainingValues = legalValuesCopy[row][i];
                         remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
                         if (remainingValues.empty())
                         {
@@ -251,9 +274,9 @@ private:
                             break;
                         }
                     }
-                    if (boardCopy[i][col].first == 0)
+                    if (board[i][col] == 0)
                     {
-                        auto &remainingValues = boardCopy[i][col].second;
+                        auto &remainingValues = legalValuesCopy[i][col];
                         remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
                         if (remainingValues.empty())
                         {
@@ -272,9 +295,9 @@ private:
                         {
                             int actualRow = startRow + boxRow;
                             int actualCol = startCol + boxCol;
-                            if (boardCopy[actualRow][actualCol].first == 0)
+                            if (board[actualRow][actualCol] == 0)
                             {
-                                auto &remainingValues = boardCopy[actualRow][actualCol].second;
+                                auto &remainingValues = legalValuesCopy[actualRow][actualCol];
                                 remainingValues.erase(remove(remainingValues.begin(), remainingValues.end(), value), remainingValues.end());
                                 if (remainingValues.empty())
                                 {
@@ -291,11 +314,11 @@ private:
                 ++nodesExpanded;
 
                 // Explore
-                if (isConsistent && solve_btfc_helper(boardCopy, emptyCells, index + 1, nodesExpanded))
+                if (isConsistent && solve_btfc_helper(board, emptyCells, index + 1, nodesExpanded, legalValuesCopy))
                     return true;
 
                 // Unchoose
-                board[row][col].first = 0;
+                board[row][col] = 0;
             }
         }
 
@@ -308,12 +331,12 @@ private:
         // int startCol = 3 * (col / 3);
         for (int i = 0; i < 9; i++)
         {
-            if (board[i][col].first == c)
+            if (board[i][col] == c)
                 return false;
-            if (board[row][i].first == c)
+            if (board[row][i] == c)
                 return false;
             // if (board[startRow + i / 3][startCol + i % 3].first == c)
-            if (board[3 * (row / 3) + i / 3][3 * (col / 3) + i % 3].first == c)
+            if (board[3 * (row / 3) + i / 3][3 * (col / 3) + i % 3] == c)
                 return false;
         }
         return true;
@@ -326,7 +349,7 @@ private:
         {
             for (int j = 0; j < 9; j++)
             {
-                if (board[i][j].first == 0)
+                if (board[i][j] == 0)
                     emptyCells.push_back({i, j});
             }
         }
@@ -358,16 +381,18 @@ Board processInput(string input)
     for (int i = 0; i < 9; i++)
     {
         // vector<pair<int, unsigned short>> row;
-        vector<pair<int, vector<int>>> row;
+        // vector<pair<int, vector<int>>> row;
+        vector<int> row;
         for (int j = 0; j < 9; j++)
         {
             value = input[i * 9 + j] - '0';
 
             // For a non-zero value, since we can't change it, we set the remainingValues to 0
-            if (value != 0)
-                row.push_back(make_pair(value, vector<int>{}));
-            else
-                row.push_back(make_pair(value, vector<int>{1, 2, 3, 4, 5, 6, 7, 8, 9}));
+            // if (value != 0)
+            //     row.push_back(make_pair(value, vector<int>{}));
+            // else
+            //     row.push_back(make_pair(value, vector<int>{1, 2, 3, 4, 5, 6, 7, 8, 9}));
+            row.push_back(value);
         }
         board.push_back(row);
     }
