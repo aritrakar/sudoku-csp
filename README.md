@@ -8,23 +8,42 @@ This project presents a Sudoku solver implemented in Python, modeled as a Constr
 
 ### Prerequisites
 
+- C++17 OR
 - Python 3.8+
 
 ### Running the Solver
 
-To run the Sudoku solver, simply download the IPYNB notebook. A plain Python file is also provided. To use the file, execute the following command in your terminal:
-
 ```bash
-python sudoku_solver.py
+# Clone the repository
+git clone https://
+cd sudoku-csp
+
+# For the C++ solution
+# Compile
+g++ -std=c++17 -03 sudoku_solver.cpp -o sudoku
+./sudoku 2 # Mode 2. See below for details.
 ```
 
 ## Implementation Details
 
-There are 3 modes:
+There are 2 modes and 3 approaches to solve the Sudoku puzzle. The mode and approach can be specified as command-line arguments. The approahces are:
 
-- Backtracking: `b`
-- Backtracking + Forward Checking: `btfc`
-- Backtracking + Forward Checking + Heuristics: `btfch`
+- Backtracking (1): `b`
+- Backtracking + Forward Checking (2): `btfc`
+- Backtracking + Forward Checking + Heuristics (3): `btfch`
+
+The modes are:
+
+- Mode 1: Solve a single puzzle with a specified approach.
+
+  ```bash
+      ./sudoku 1 <puzzle> <approach>
+  ```
+
+- Mode 2: Solve a single puzzle with all approaches and compare the results. By default, it'll search in the `etc` directory.
+  ```bash
+      ./sudoku 2 <puzzle>
+  ```
 
 ### Modeling Sudoku as a CSP
 
@@ -42,7 +61,7 @@ Backtracking is not efficient for solving Sudoku, but it is a good starting poin
 
 Note: There is a major difference between a standard backtracking approach and the approach used in my solution. A standard backtracking solution would fill cells sequentially, starting from the top-left corner and in the domain order (i.e. from 1 to 9). However, my solution uses **randomizes** the order for both of these. Certain puzzles can be solved by backtracking using the traditional approach due to the ordering of the cells and the domain. However, randomizing the order of the cells and the domain makes the problem more challenging.
 
-The backtracking function can be found [here]().
+<!-- The backtracking function can be found [here](). -->
 
 ### Backtracking + Forward Checking for sudoku
 
@@ -50,7 +69,7 @@ Since backtracking is not efficient for solving Sudoku, we can use forward check
 
 Forward checking is a simple and efficient _constraint propagation_ technique that eliminates values from the domain of variables that have been assigned a value. It is a way to keep track of remaining legal values for unassigned variables. Whenever a variable is assigned a value, the forward checking algorithm removes that value from the domain of all the variables connected to the variable that was just assigned. This helps in reducing the search space by eliminating values that cannot be part of the solution and checking for failure early.
 
-The backtracking + forward checking function can be found [here]().
+<!-- The backtracking + forward checking function can be found [here](). -->
 
 ### Backtracking + Forward Checking + Heuristics for sudoku
 
@@ -64,25 +83,31 @@ Lastly, we can use heuristics to further improve the efficiency of the solver. H
 
 ## Experiiment results
 
-The solver was tested on 4 different puzzles difficulties (easy, medium, hard, and evil) for 10 iterations each. Statistics about the time taken to solve each puzzle and the number of nodes expanded in the search tree were recorded. The results are shown below for each approach:
+The solver was tested on 4 different puzzles difficulties (easy, medium, hard, and evil) for 10 iterations each. Statistics about the time taken to solve each puzzle and the number of nodes expanded in the search tree were recorded. The results are shown below for each approach.
+
+Note:
+
+- The results are not deterministic due to the randomization of the order of cells and domain.
+- The results are presented as the mean ± standard deviation.
+- Initially, I tried running with the Python solution and with a higher number of iterations, but it was taking too long. So, I switched to C++. The C++ solution is much faster than the Python solution.
 
 ### Time taken to solve the puzzle in milliseconds
 
-| Difficulty | btfch                                   | btfc                                   | b   |
-| ---------- | --------------------------------------- | -------------------------------------- | --- |
-| Easy       | 1.890802400012035 ± 9.190758212574265   | 408.7562686799904 ± 2002.4560833995129 | N/A |
-| Medium     | 2.7266593200010902 ± 13.28979370587803  | 2095.844647840003 ± 10267.430175684243 | N/A |
-| Hard       | 3.465234879995478 ± 16.92438692419921   | 150718.96512020004 ± 738369.0487443672 | N/A |
-| Evil       | 2.6524054399988017 ± 12.939423608551735 | N/A                                    | N/A |
+| Difficulty | btfch            | btfc             | b                 |
+| ---------- | ---------------- | ---------------- | ----------------- |
+| Easy       | 1.8 ± 2.13542    | 7.5 ± 20.5098    | 124.6 ± 106.516   |
+| Medium     | 6.7 ± 5.56866    | 9.5 ± 9.46837    | 2417.8 ± 4476.78  |
+| Hard       | 192.9 ± 147.634  | 403.5 ± 389.354  | 77080.3 ± 99295.3 |
+| Evil       | 2068.6 ± 1253.96 | 5229.3 ± 6034.34 | 142869 ± 284326   |
 
 ### Number of nodes expanded in the search tree
 
-| Difficulty | btfch                     | btfc                           | b   |
-| ---------- | ------------------------- | ------------------------------ | --- |
-| Easy       | 2.8 ± 8.818163074019441   | 13447.84 ± 65875.79330569306   | N/A |
-| Medium     | 4.88 ± 19.008040403997487 | 87181.8 ± 427096.950735263     | N/A |
-| Hard       | 5.52 ± 22.143387274759917 | 6459193.12 ± 31643449.68921189 | N/A |
-| Evil       | 5.24 ± 20.771673018801355 | N/A                            | N/A |
+| Difficulty | btfch             | btfc                      | b                         |
+| ---------- | ----------------- | ------------------------- | ------------------------- |
+| Easy       | 815.1 ± 695.224   | 4565.9 ± 11716.6          | 388242 ± 327441           |
+| Medium     | 2236.2 ± 1701.42  | 5327.6 ± 4810.94          | 7.7055e+06 ± 1.42765e+07  |
+| Hard       | 61352.3 ± 46844.4 | 237808 ± 230248           | 2.44967e+08 ± 3.16293e+08 |
+| Evil       | 645198 ± 389603   | 2.98515e+06 ± 3.47978e+06 | 4.47678e+08 ± 8.88712e+08 |
 
 ## Conclusion
 
