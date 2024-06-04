@@ -1,4 +1,4 @@
-# Python Sudoku Solver
+# Sudoku Solver
 
 ## Introduction
 
